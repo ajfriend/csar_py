@@ -1,5 +1,7 @@
+# No `version:` here on purpose — the package version has a single source of
+# truth: `[project] version` in pyproject.toml. meson-python reads it from
+# there; a version in this project() call would be an unused, drift-prone copy.
 project('csar', 'c', 'cython',
-  version: '0.4.0',
   meson_version: '>=1.4.0',
 )
 

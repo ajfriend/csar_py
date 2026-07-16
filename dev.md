@@ -200,25 +200,39 @@ restore the URL pin.
 
 ## Cutting a release
 
-> **PyPI publishing is currently disabled** — the `to-pypi` job in
-> `wheels.yml` is commented out (see its `TODO(pypi)`). The sdist + wheels
-> still build and test on every push/release; they just aren't uploaded.
-> The steps below apply once it's re-enabled.
+csar publishes to **PyPI** (https://pypi.org/project/csar/) automatically on a
+published GitHub release, via the `to-pypi` job in `wheels.yml` — OIDC trusted
+publishing (no API tokens), gated by the repo's `pypi` GitHub environment
+(a required-reviewer approval step). The first PyPI release was `0.1.1`.
 
-Once the `pypi` Trusted-Publisher OIDC environment is configured on the
-GitHub repo (no API tokens involved):
+> **The package version has ONE source of truth: `[project] version` in
+> `pyproject.toml`.** Bump only that. `meson.build`'s `project()` deliberately
+> carries no `version:` (meson-python reads pyproject), so there is no second
+> place to keep in sync. The git tag `vX.Y.Z` must match that version.
 
-1. **Pin a released `csar_zig`** (see above) and commit it.
-2. **Bump the version** in `pyproject.toml` (`project.version`). Commit
-   + push to `main`. Wait for `test` and `wheels` to go green.
-3. **Create a tag + release** on GitHub: Draft a new release → choose
-   tag `vX.Y.Z` ("Create new tag on publish") → target `main` →
-   Generate release notes → Publish.
-4. **Watch the publish.** The release event triggers the `wheels`
-   workflow; its `to-pypi` job downloads every artifact and pushes to
-   PyPI via OIDC. If the `pypi` environment requires reviewers, approve
-   the deployment.
-5. **Verify** with `pip install csar==X.Y.Z` in a fresh venv.
+Steps:
 
-PyPI versions and tags are immutable — if an upload fails mid-publish,
-bump to `X.Y.Z+1` rather than reusing the number.
+1. **Pin a released `csar_zig`** (see above) if bumping the solver, and commit.
+2. **Bump `[project] version`** in `pyproject.toml`, add a `changelog.md`
+   entry, commit + push to `main`. Wait for `test` and `wheels` to go green.
+3. **Create a GitHub release**: tag `vX.Y.Z` (matching the pyproject version),
+   target `main`, write notes (link the `skar_py` provenance for the record).
+4. **Approve the publish.** The release event triggers `wheels`; its `to-pypi`
+   job builds the sdist + full wheel matrix, then pauses on the `pypi`
+   environment — **approve the deployment** to let it upload via OIDC.
+5. **Verify** in a fresh env: `uv pip install csar==X.Y.Z` + a quick solve.
+
+PyPI versions and git tags are immutable — if an upload fails mid-publish, bump
+to `X.Y.Z+1` rather than reusing the number. (This is why `0.1.0`, which was
+GitHub-only and predates the publish job, is not on PyPI: PyPI starts at
+`0.1.1`.)
+
+### What ships in the artifacts
+
+- **Wheel:** the `csar/` package + the compiled `_cy` extension (with the
+  `csar_zig` static archive linked in) + metadata. Nothing else.
+- **Sdist:** build inputs (`pyproject.toml`, `meson.build`, `src/`), `tests/`,
+  and `readme`/`LICENSE`/`changelog`. Repo/dev-only files (`.github/`,
+  `justfile`, `dev.md`, `scripts/`, `.gitignore`) are kept out of the sdist via
+  `.gitattributes` `export-ignore` — meson-python builds the sdist from
+  `git archive HEAD`, which honors those rules.
