@@ -170,6 +170,13 @@ be faster. The outcome's `.method` records the concrete path that ran.
 └── tests/test_bindings.py
 ```
 
+## History
+
+`csar` was previously developed as
+[`skar_py`](https://github.com/ajfriend/skar_py) and forked into this fresh
+repository under a new name, since the `skar` name was already taken on PyPI.
+The `skar_py` repository is preserved as-is for its history and provenance.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
