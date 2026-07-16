@@ -6,7 +6,7 @@ project('csar', 'c', 'cython',
 py = import('python').find_installation(pure: false)
 
 # Per-platform name of Zig's static-archive output.
-zig_out_name = host_machine.system() == 'windows' ? 'skar.lib' : 'libskar.a'
+zig_out_name = host_machine.system() == 'windows' ? 'csar.lib' : 'libcsar.a'
 
 # Pin macOS deployment target so the .a matches the wheel's claimed
 # minimum (cibuildwheel sets MACOSX_DEPLOYMENT_TARGET; locally default
@@ -23,7 +23,7 @@ endif
 
 # Run `zig build` and ask Zig to install its lib directly into the
 # meson build dir (so meson's custom_target output basename matches).
-libskar = custom_target('libskar',
+libcsar = custom_target('libcsar',
   output: zig_out_name,
   command: [py, zig_args,
     '--prefix', meson.current_build_dir(),
@@ -33,7 +33,7 @@ libskar = custom_target('libskar',
 
 py.extension_module('_cy',
   'src/cython/_cy.pyx',
-  link_with: libskar,
+  link_with: libcsar,
   install: true,
   subdir: 'csar',
 )

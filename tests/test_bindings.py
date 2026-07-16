@@ -429,7 +429,7 @@ NEAR_COPLANAR_ARC_DEG = COPLANAR_ARC_DEG + np.array(
 def test_exactly_coplanar_rejected_on_every_path_even_bypassed():
     # Rank-deficiency is an input property, decided once in preprocessing:
     # bypassing the near-coplanar check does NOT let exactly-degenerate
-    # input through to any solver path (skar_zig >= 0.6.0).
+    # input through to any solver path (csar_zig).
     for method in ('alternating', 'trust', 'auto'):
         with pytest.raises(ValueError, match='coplanar'):
             csar.solve(COPLANAR_ARC_DEG, coplanarity_tol=0.0, method=method)
@@ -454,7 +454,7 @@ def test_invalid_tolerance():
 
 def test_method_auto_is_the_recommended_path():
     # 'auto' is upstream's alias for the recommended method — currently
-    # the trust path (skar_zig >= 0.6.0). Identical outcome to asking
+    # the trust path (csar_zig). Identical outcome to asking
     # for 'trust' explicitly.
     t = csar.solve(OCTANT_XYZ, geo='vec3', method='trust')
     auto = csar.solve(OCTANT_XYZ, geo='vec3')   # default method='auto'

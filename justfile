@@ -58,7 +58,7 @@ purge:
     just _rm .zig-cache
     just _rm .mypy_cache
     just _rm .ruff_cache
-    just _rm 'libskar.*'
+    just _rm 'libcsar.*'
     just _rm out
     just _rm zig-pkg
     uv cache clean csar

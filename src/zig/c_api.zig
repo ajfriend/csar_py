@@ -1,6 +1,6 @@
-//! C ABI shim for the skar Python bindings. Marshals between C
-//! scalars / out-params and the upstream `skar.solve` API; all real
-//! work happens in the `skar` Zig package.
+//! C ABI shim for the csar Python bindings. Marshals between C
+//! scalars / out-params and the upstream `csar.solve` API; all real
+//! work happens in the `csar` Zig package.
 //!
 //! Minimal surface: it exposes the headline result of a solve —
 //! status, aspect ratio, cone axis, eigenvalues, gap — but not the
@@ -10,38 +10,38 @@
 //! is deferred until a consumer needs it.
 
 const std = @import("std");
-const skar = @import("skar");
+const csar = @import("csar");
 
-// Return codes for the `skar_solve` call itself: 0 = "ran, status is
+// Return codes for the `csar_solve` call itself: 0 = "ran, status is
 // in out_status"; non-zero = "could not run". Mirrors the upstream
-// errors-vs-outcome split (see src/api.zig in skar_zig).
-pub const SKAR_OK: c_int = 0;
-pub const SKAR_INSUFFICIENT_POINTS: c_int = 1;
-pub const SKAR_INVALID_TOLERANCE: c_int = 2;
-pub const SKAR_COPLANAR_INPUT: c_int = 3;
-pub const SKAR_OUT_OF_MEMORY: c_int = 4;
-pub const SKAR_INTERNAL: c_int = 5;
-pub const SKAR_INVALID_METHOD: c_int = 6;
+// errors-vs-outcome split (see src/api.zig in csar_zig).
+pub const CSAR_OK: c_int = 0;
+pub const CSAR_INSUFFICIENT_POINTS: c_int = 1;
+pub const CSAR_INVALID_TOLERANCE: c_int = 2;
+pub const CSAR_COPLANAR_INPUT: c_int = 3;
+pub const CSAR_OUT_OF_MEMORY: c_int = 4;
+pub const CSAR_INTERNAL: c_int = 5;
+pub const CSAR_INVALID_METHOD: c_int = 6;
 
-// `method` in-param values, mapping onto `skar.Method`. SKAR_METHOD_AUTO
+// `method` in-param values, mapping onto `csar.Method`. CSAR_METHOD_AUTO
 // is upstream's alias for its recommended method (`Method.recommended`);
 // `out_method` reports the concrete path that produced the outcome.
-pub const SKAR_METHOD_ALTERNATING: c_int = 0;
-pub const SKAR_METHOD_TRUST: c_int = 1;
-pub const SKAR_METHOD_AUTO: c_int = 2;
+pub const CSAR_METHOD_ALTERNATING: c_int = 0;
+pub const CSAR_METHOD_TRUST: c_int = 1;
+pub const CSAR_METHOD_AUTO: c_int = 2;
 
-// Values written to `out_status` on SKAR_OK — which Outcome variant
+// Values written to `out_status` on CSAR_OK — which Outcome variant
 // the solver produced.
-pub const SKAR_STATUS_CONVERGED: c_int = 0;
-pub const SKAR_STATUS_INFEASIBLE: c_int = 1;
-pub const SKAR_STATUS_DID_NOT_CONVERGE: c_int = 2;
+pub const CSAR_STATUS_CONVERGED: c_int = 0;
+pub const CSAR_STATUS_INFEASIBLE: c_int = 1;
+pub const CSAR_STATUS_DID_NOT_CONVERGE: c_int = 2;
 
 /// The `out_method` value for a diagnostics union: which solver path
 /// produced the outcome (the union tag).
-fn pathTag(diag: skar.Diagnostics) c_int {
+fn pathTag(diag: csar.Diagnostics) c_int {
     return switch (diag) {
-        .alternating => SKAR_METHOD_ALTERNATING,
-        .trust => SKAR_METHOD_TRUST,
+        .alternating => CSAR_METHOD_ALTERNATING,
+        .trust => CSAR_METHOD_TRUST,
     };
 }
 
@@ -51,9 +51,9 @@ fn pathTag(diag: skar.Diagnostics) c_int {
 /// `[x0, y0, z0, ...]` — what numpy hands us for a `(N, 3)` float64
 /// array. `[3]f64` is exactly that layout, so we reinterpret the
 /// pointer with no copy. `n_hull`, `gap_tol`, `coplanarity_tol`, and
-/// `max_outer` map straight onto `skar.SolveOptions`.
+/// `max_outer` map straight onto `csar.SolveOptions`.
 ///
-/// On SKAR_OK, `out_status` selects which outputs are meaningful:
+/// On CSAR_OK, `out_status` selects which outputs are meaningful:
 ///   - converged:        sigma, q, gap, outer_iters
 ///   - did_not_converge: sigma, q, gap, outer_iters (uncertified)
 ///   - infeasible:       residual
@@ -64,10 +64,10 @@ fn pathTag(diag: skar.Diagnostics) c_int {
 /// outer-iteration count on the alternating path; opening rounds +
 /// trust-region iterations + re-certification attempts on the trust
 /// path. `out_method` reports which path produced the outcome
-/// (SKAR_METHOD_ALTERNATING/TRUST; under SKAR_METHOD_AUTO that is the
+/// (CSAR_METHOD_ALTERNATING/TRUST; under CSAR_METHOD_AUTO that is the
 /// method the alias resolved to; -1 for infeasible, which carries no
 /// path tag).
-pub export fn skar_solve(
+pub export fn csar_solve(
     pts_buf: [*]const f64,
     n: usize,
     gap_tol: f64,
@@ -85,16 +85,16 @@ pub export fn skar_solve(
 ) c_int {
     const X: []const [3]f64 = @as([*]const [3]f64, @ptrCast(pts_buf))[0..n];
 
-    const opts: skar.SolveOptions = .{
+    const opts: csar.SolveOptions = .{
         .gap_tol = gap_tol,
         .n_hull = @intCast(n_hull),
         .coplanarity_tol = coplanarity_tol,
         .max_outer = @intCast(max_outer),
         .method = switch (method) {
-            SKAR_METHOD_ALTERNATING => .alternating,
-            SKAR_METHOD_TRUST => .trust,
-            SKAR_METHOD_AUTO => .auto,
-            else => return SKAR_INVALID_METHOD,
+            CSAR_METHOD_ALTERNATING => .alternating,
+            CSAR_METHOD_TRUST => .trust,
+            CSAR_METHOD_AUTO => .auto,
+            else => return CSAR_INVALID_METHOD,
         },
     };
 
@@ -108,20 +108,20 @@ pub export fn skar_solve(
     out_residual.* = nan;
     out_method.* = -1;
 
-    var outcome = skar.solve(std.heap.c_allocator, X, opts) catch |err| switch (err) {
-        error.InsufficientPoints => return SKAR_INSUFFICIENT_POINTS,
-        error.InvalidTolerance => return SKAR_INVALID_TOLERANCE,
-        error.CoplanarInput => return SKAR_COPLANAR_INPUT,
-        error.OutOfMemory => return SKAR_OUT_OF_MEMORY,
+    var outcome = csar.solve(std.heap.c_allocator, X, opts) catch |err| switch (err) {
+        error.InsufficientPoints => return CSAR_INSUFFICIENT_POINTS,
+        error.InvalidTolerance => return CSAR_INVALID_TOLERANCE,
+        error.CoplanarInput => return CSAR_COPLANAR_INPUT,
+        error.OutOfMemory => return CSAR_OUT_OF_MEMORY,
         // SolveError variants (NegativeDualityGap / NegativeEigenvalue /
         // SingularMoment): internal-correctness bugs in the library.
-        else => return SKAR_INTERNAL,
+        else => return CSAR_INTERNAL,
     };
     defer outcome.deinit();
 
     switch (outcome) {
         .converged => |c| {
-            out_status.* = SKAR_STATUS_CONVERGED;
+            out_status.* = CSAR_STATUS_CONVERGED;
             out_sigma.* = c.sigma;
             out_q.* = c.Q.m;
             out_gap.* = c.gap;
@@ -129,11 +129,11 @@ pub export fn skar_solve(
             out_method.* = pathTag(c.diag);
         },
         .infeasible => |inf| {
-            out_status.* = SKAR_STATUS_INFEASIBLE;
+            out_status.* = CSAR_STATUS_INFEASIBLE;
             out_residual.* = inf.residual;
         },
         .did_not_converge => |d| {
-            out_status.* = SKAR_STATUS_DID_NOT_CONVERGE;
+            out_status.* = CSAR_STATUS_DID_NOT_CONVERGE;
             out_sigma.* = d.sigma;
             out_q.* = d.Q.m;
             out_gap.* = d.gap;
@@ -141,5 +141,5 @@ pub export fn skar_solve(
             out_method.* = pathTag(d.diag);
         },
     }
-    return SKAR_OK;
+    return CSAR_OK;
 }

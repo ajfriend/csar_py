@@ -2,12 +2,12 @@
 """Cython binding for csar — internal; called from `csar.solve`.
 
 Compiled by meson (driven by meson-python); links against the Zig
-static archive libskar.{a,lib}. Exposed as `csar._cy`.
+static archive libcsar.{a,lib}. Exposed as `csar._cy`.
 """
 
 cdef extern from *:
     """
-    int skar_solve(const double *pts, size_t n,
+    int csar_solve(const double *pts, size_t n,
                    double gap_tol, int n_hull, double coplanarity_tol,
                    unsigned int max_outer, int method,
                    int *out_status,
@@ -15,7 +15,7 @@ cdef extern from *:
                    unsigned int *out_outer_iters, double *out_residual,
                    int *out_method);
     """
-    int skar_solve(const double *pts, size_t n,
+    int csar_solve(const double *pts, size_t n,
                    double gap_tol, int n_hull, double coplanarity_tol,
                    unsigned int max_outer, int method,
                    int *out_status,
@@ -24,12 +24,12 @@ cdef extern from *:
                    int *out_method)
 
 
-# Status strings indexed by the SKAR_STATUS_* code that c_api.zig
+# Status strings indexed by the CSAR_STATUS_* code that c_api.zig
 # writes to out_status. Owned here, at the C boundary, so the raw
 # integer codes never leak into the Python wrapper.
 _STATUS = ('converged', 'infeasible', 'did_not_converge')
 
-# Solver-path strings indexed by the SKAR_METHOD_* code; also the
+# Solver-path strings indexed by the CSAR_METHOD_* code; also the
 # in-param encoding ('auto' = index 2 is input-only — out_method always
 # reports a concrete path, or -1 (None) for infeasible).
 _METHOD = ('alternating', 'trust', 'auto')
@@ -46,7 +46,7 @@ def solve(double[:, ::1] pts not None, double gap_tol, int n_hull,
     cdef double q[9]
     cdef unsigned int outer_iters
     cdef int out_method
-    cdef int err = skar_solve(
+    cdef int err = csar_solve(
         &pts[0, 0], pts.shape[0], gap_tol, n_hull, coplanarity_tol, max_outer,
         method,
         &status, &sigma[0], &q[0], &gap, &outer_iters, &residual, &out_method,

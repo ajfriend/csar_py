@@ -2,7 +2,7 @@
 
 Given a point set on the unit sphere, find the tightest ellipsoidal cone
 enclosing it and return its axis ratio. Thin Python bindings over the
-`skar` Zig package.
+`csar` Zig package.
 
 Public API:
     solve(points, *, geo=..., ...) -> Outcome

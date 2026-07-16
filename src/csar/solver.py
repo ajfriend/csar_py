@@ -44,7 +44,7 @@ def solve(
         max_outer: outer-iteration cap before returning a
             `'did_not_converge'` result.
         method: solver path. `'auto'` (the default) resolves to the
-            library's recommended method for the pinned skar_zig
+            library's recommended method for the pinned csar_zig
             version — currently `'trust'`, a trust-region descent that
             converges on every input family constructed to date,
             including the wide-angle/elongated inputs the original

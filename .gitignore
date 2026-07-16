@@ -14,7 +14,7 @@ dist/
 *.egg-info/
 
 # Bundled static library (produced by the zig build)
-src/csar/libskar.*
+src/csar/libcsar.*
 
 # Zig build artifacts
 zig-out/

@@ -1,12 +1,12 @@
 # csar: Conic Spherical Aspect Ratio
 
-Python bindings for [`skar_zig`](https://github.com/ajfriend/skar_zig),
+Python bindings for [`csar_zig`](https://github.com/ajfriend/csar_zig),
 a spherical aspect-ratio solver. Given a point set on the unit sphere,
 it finds the tightest ellipsoidal cone enclosing the points and returns
 the cone's axis ratio.
 
 A thin Cython binding over a small C-ABI shim that links the upstream
-`skar` Zig package as a static archive — no separate shared library
+`csar` Zig package as a static archive — no separate shared library
 ships in the wheel.
 
 ## Install
@@ -32,7 +32,7 @@ pip install "csar[plot] @ git+https://github.com/ajfriend/csar.git"
 
 That path triggers a source build: meson-python pulls the Zig toolchain
 from the `ziglang` PyPI wheel (`python -m ziglang build`), compiles the
-upstream `skar_zig` package into a static archive — fetched over the
+upstream `csar_zig` package into a static archive — fetched over the
 network from the URL pinned in `src/zig/build.zig.zon` — then cythonizes
 `src/cython/_cy.pyx` and links the result against it. No host-level Zig
 or Cython install is required (Python 3.11+).
@@ -161,9 +161,9 @@ be faster. The outcome's `.method` records the concrete path that ran.
 │   │   ├── plot.py         — plot_cone (optional; needs matplotlib)
 │   │   └── solver.py       — solve(): convert → _cy.solve → build
 │   └── zig/
-│       ├── build.zig       — produces libskar.{a,lib} (static archive)
-│       ├── build.zig.zon   — pins the skar_zig dependency
-│       └── c_api.zig       — pub export fn skar_solve
+│       ├── build.zig       — produces libcsar.{a,lib} (static archive)
+│       ├── build.zig.zon   — pins the csar_zig dependency
+│       └── c_api.zig       — pub export fn csar_solve
 ├── scripts/                — examples (run via `just states|countries`)
 │   ├── states/             — US-state aspect ratios (geopandas + csar)
 │   └── countries/          — country aspect ratios (geopandas + csar)

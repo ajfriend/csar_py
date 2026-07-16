@@ -6,7 +6,7 @@ commit that carries the full detail.
 ## [0.1.0]
 
 - Initial release of `csar` (conic spherical aspect ratio): Python bindings
-  for the [`skar_zig`](https://github.com/ajfriend/skar_zig) solver. Given a
+  for the [`csar_zig`](https://github.com/ajfriend/csar_zig) solver. Given a
   point set on the unit sphere, `csar.solve` returns the tightest enclosing
   ellipsoidal cone as a typed `Converged` / `Infeasible` / `DidNotConverge`
   outcome; `method=` selects the solver path (`'auto'` default, resolving to

@@ -6,7 +6,7 @@ contributor workflows for `csar`.
 ## Architecture
 
 A thin Cython binding around a small C-ABI shim that calls into the
-upstream `skar_zig` package. The Python side accepts points as
+upstream `csar_zig` package. The Python side accepts points as
 `(lat, lng)` (degrees by default) or unit `(x, y, z)` vectors,
 normalizes them to a contiguous `(N, 3)` float64 buffer with NumPy,
 and hands that buffer to the Cython extension via a typed memoryview
@@ -15,17 +15,17 @@ row layout, so the shim reinterprets the pointer with no per-element
 conversion.
 
 The C-ABI shim (`src/zig/c_api.zig`) and `src/zig/build.zig` both live
-here, not in the upstream `skar_zig` package. The split is
+here, not in the upstream `csar_zig` package. The split is
 intentional:
 
-- **`skar_zig` (upstream)**: pure Zig solver library. Exports a
+- **`csar_zig` (upstream)**: pure Zig solver library. Exports a
   `Module` for other Zig code; no C ABI, no shared library.
-- **`csar` (this repo)**: depends on `skar_zig` via
-  `build.zig.zon`, wraps it in a tiny C ABI (`skar_solve`), builds a
+- **`csar` (this repo)**: depends on `csar_zig` via
+  `build.zig.zon`, wraps it in a tiny C ABI (`csar_solve`), builds a
   static archive, and links it directly into the Cython extension
   `_cy.<EXT>`.
 
-libskar is a **static** archive (not a shared library) so it gets
+libcsar is a **static** archive (not a shared library) so it gets
 pulled into `_cy.so` / `_cy.pyd` at link time. That sidesteps both the
 Windows MSVC CRT mismatch and the macOS dylib `__dso_handle`
 regression that shipping a Zig *dynamic* library triggers — the same
@@ -33,7 +33,7 @@ rationale as the sibling `sparea_py` bindings.
 
 ### What the shim exposes (minimal surface)
 
-`skar.solve` (Zig) returns a tagged `Outcome` union (`converged` /
+`csar.solve` (Zig) returns a tagged `Outcome` union (`converged` /
 `infeasible` / `did_not_converge`), not a single scalar. The shim
 writes a `status` discriminator plus the per-variant payload into C
 out-params:
@@ -68,7 +68,7 @@ caller-owned-buffer protocol across the C boundary; defer that until a
 consumer needs it. `checkFeasibility` is likewise not yet wired up.
 
 The shim's `c_int` return value is the errors-vs-outcome split from
-`skar_zig/src/api.zig`: `0` = "ran, see `status`"; non-zero = "could
+`csar_zig/src/api.zig`: `0` = "ran, see `status`"; non-zero = "could
 not run" (insufficient points, invalid tolerance, coplanar input, OOM,
 or an internal PSD/duality violation). `_cy.pyx` maps each non-zero
 code to the matching Python exception.
@@ -90,9 +90,9 @@ code to the matching Python exception.
 │   │   ├── plot.py         — plot_cone (optional matplotlib helper)
 │   │   └── solver.py       — solve(): convert → _cy.solve → build
 │   └── zig/
-│       ├── build.zig       — produces libskar.{a,lib} (static archive)
-│       ├── build.zig.zon   — pins the skar_zig dependency
-│       └── c_api.zig       — pub export fn skar_solve
+│       ├── build.zig       — produces libcsar.{a,lib} (static archive)
+│       ├── build.zig.zon   — pins the csar_zig dependency
+│       └── c_api.zig       — pub export fn csar_solve
 ├── scripts/                — examples (own dep groups; not part of the wheel)
 │   ├── states/             — US-state aspect ratios (`just states`)
 │   └── countries/          — country aspect ratios (`just countries`)
@@ -101,7 +101,7 @@ code to the matching Python exception.
 ```
 
 The wheel ships a single `_cy.<EXT>` (the Cython extension with
-libskar statically linked in); no separate dylib.
+libcsar statically linked in); no separate dylib.
 
 ## Building and testing locally
 
@@ -150,36 +150,36 @@ rebuild-on-import, but that hook shells out to `ninja` and is fragile under
 uv's build isolation (stale `ninja` path → `FileNotFoundError`); not worth
 the machinery for a ~4s gap.
 
-## The skar_zig dependency: release pin vs. local path
+## The csar_zig dependency: release pin vs. local path
 
-`src/zig/build.zig.zon` pins the upstream `skar` package. The repo ships
+`src/zig/build.zig.zon` pins the upstream `csar` package. The repo ships
 a **URL+hash pin to a released tag** — the form wheels/CI need, since
 they build from an isolated sdist copy that can't see a sibling checkout:
 
 ```zig
-.skar = .{
-    .url = "https://github.com/ajfriend/skar_zig/archive/refs/tags/v0.1.0.tar.gz",
-    .hash = "skar-0.1.0-...",
+.csar = .{
+    .url = "https://github.com/ajfriend/csar_zig/archive/refs/tags/v0.1.0.tar.gz",
+    .hash = "csar-0.1.0-...",
 },
 ```
 
 To **co-develop both repos**, temporarily swap to a local path — no
 network, no GitHub needed. `just test` / `uv sync` resolve it in-place;
 only sdist/wheel builds (`uv build`, `just wheel`, CI) need the URL form,
-since they build from a temp dir where `../../../skar_zig` doesn't exist:
+since they build from a temp dir where `../../../csar_zig` doesn't exist:
 
 ```zig
-.skar = .{ .path = "../../../skar_zig" },   // relative to src/zig/
+.csar = .{ .path = "../../../csar_zig" },   // relative to src/zig/
 ```
 
-To **bump to a newer skar_zig** (or restore the URL pin after local dev):
+To **bump to a newer csar_zig** (or restore the URL pin after local dev):
 
 ```sh
-cd src/zig && zig fetch --save=skar \
-  https://github.com/ajfriend/skar_zig/archive/refs/tags/vX.Y.Z.tar.gz
+cd src/zig && zig fetch --save=csar \
+  https://github.com/ajfriend/csar_zig/archive/refs/tags/vX.Y.Z.tar.gz
 ```
 
-That rewrites `dependencies.skar` to `.url` + `.hash`; re-run `just test`.
+That rewrites `dependencies.csar` to `.url` + `.hash`; re-run `just test`.
 Caveat: if the existing entry is a `.path`, `--save` overwrites the path
 *value* with the URL and adds no hash — first clear it to
 `.dependencies = .{}`, then fetch.
@@ -193,7 +193,7 @@ Caveat: if the existing entry is a `.path`, `--save` overwrites the path
   PyPI via OIDC trusted publishing.
 
 Both build from an isolated sdist using the URL+hash pin above, so they
-need `skar_zig` pushed and tagged on GitHub (it is). If you switch to a
+need `csar_zig` pushed and tagged on GitHub (it is). If you switch to a
 local `.path` for co-development, the in-place `test` workflow's
 `uv sync` still works, but the `wheels` sdist build won't until you
 restore the URL pin.
@@ -208,7 +208,7 @@ restore the URL pin.
 Once the `pypi` Trusted-Publisher OIDC environment is configured on the
 GitHub repo (no API tokens involved):
 
-1. **Pin a released `skar_zig`** (see above) and commit it.
+1. **Pin a released `csar_zig`** (see above) and commit it.
 2. **Bump the version** in `pyproject.toml` (`project.version`). Commit
    + push to `main`. Wait for `test` and `wheels` to go green.
 3. **Create a tag + release** on GitHub: Draft a new release → choose
