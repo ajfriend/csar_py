@@ -1,5 +1,9 @@
 # csar: Conic Spherical Aspect Ratio
 
+[![PyPI](https://img.shields.io/pypi/v/csar)](https://pypi.org/project/csar/)
+[![Python versions](https://img.shields.io/pypi/pyversions/csar)](https://pypi.org/project/csar/)
+[![License: MIT](https://img.shields.io/pypi/l/csar)](LICENSE)
+
 Python bindings for [`csar_zig`](https://github.com/ajfriend/csar_zig),
 a spherical aspect-ratio solver. Given a point set on the unit sphere,
 it finds the tightest ellipsoidal cone enclosing the points and returns
@@ -11,23 +15,28 @@ ships in the wheel.
 
 ## Install
 
-Not on PyPI yet — install directly from GitHub. Point pip/uv at the git
-URL, either the latest `main` or a tagged release:
-
 ```sh
-# latest main
-pip install git+https://github.com/ajfriend/csar_py.git
-uv pip install git+https://github.com/ajfriend/csar_py.git
-
-# a specific tagged release
-pip install git+https://github.com/ajfriend/csar_py.git@v0.1.0
-uv pip install git+https://github.com/ajfriend/csar_py.git@v0.1.0
+pip install csar
+# or
+uv pip install csar
 ```
 
-For the optional plotting helper (`csar.plot_cone`), add the `plot` extra:
+Wheels ship for CPython 3.11–3.14 on Linux, macOS, and Windows, so this
+needs no build toolchain. For the optional plotting helper
+(`csar.plot_cone`), add the `plot` extra:
 
 ```sh
-pip install "csar[plot] @ git+https://github.com/ajfriend/csar_py.git"
+pip install "csar[plot]"
+```
+
+### From source
+
+To build from source — the latest `main`, a specific tag, or a platform
+without a wheel — point pip/uv at the git URL:
+
+```sh
+pip install git+https://github.com/ajfriend/csar_py.git         # latest main
+pip install git+https://github.com/ajfriend/csar_py.git@v0.1.1  # a tagged release
 ```
 
 That path triggers a source build: meson-python pulls the Zig toolchain
