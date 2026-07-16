@@ -19,4 +19,6 @@ commit that carries the full detail.
   outcome; `method=` selects the solver path (`'auto'` default, resolving to
   the trust-region method). Ships as a Cython extension with the upstream Zig
   solver statically linked — no separate shared library in the wheel.
-  Continues the prototype previously developed under the `skar_py` name.
+  Continues the prototype previously developed as
+  [`skar_py`](https://github.com/ajfriend/skar_py), preserved as-is for its
+  history and provenance.
