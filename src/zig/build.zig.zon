@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.15.2",
     .dependencies = .{
         .csar = .{
-            .url = "https://github.com/ajfriend/csar_zig/archive/30603e143367ab64b6046e1856739eb54c75afca.tar.gz",
+            .url = "https://github.com/ajfriend/csar_zig/archive/refs/tags/v0.1.0.tar.gz",
             .hash = "csar-0.1.0-bkw2IeRbBwDcNzcynmnIOzW3s1IW05lF_xfxiSCpkej4",
         },
     },

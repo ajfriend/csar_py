@@ -16,18 +16,18 @@ URL, either the latest `main` or a tagged release:
 
 ```sh
 # latest main
-pip install git+https://github.com/ajfriend/csar.git
-uv pip install git+https://github.com/ajfriend/csar.git
+pip install git+https://github.com/ajfriend/csar_py.git
+uv pip install git+https://github.com/ajfriend/csar_py.git
 
 # a specific tagged release
-pip install git+https://github.com/ajfriend/csar.git@v0.1.0
-uv pip install git+https://github.com/ajfriend/csar.git@v0.1.0
+pip install git+https://github.com/ajfriend/csar_py.git@v0.1.0
+uv pip install git+https://github.com/ajfriend/csar_py.git@v0.1.0
 ```
 
 For the optional plotting helper (`csar.plot_cone`), add the `plot` extra:
 
 ```sh
-pip install "csar[plot] @ git+https://github.com/ajfriend/csar.git"
+pip install "csar[plot] @ git+https://github.com/ajfriend/csar_py.git"
 ```
 
 That path triggers a source build: meson-python pulls the Zig toolchain
