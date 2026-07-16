@@ -1,0 +1,6 @@
+/.github/ export-ignore
+/.gitignore export-ignore
+/justfile export-ignore
+/dev.md export-ignore
+/scripts/ export-ignore
+/.gitattributes export-ignore
