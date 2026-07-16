@@ -6,7 +6,7 @@ build-backend = "mesonpy"
 
 [project]
 name = "csar"
-version = "0.1.0"
+version = "0.1.1"
 description = "Conic spherical aspect-ratio solver: tightest enclosing cone of a point set on the unit sphere."
 readme = "readme.md"
 requires-python = ">=3.11"

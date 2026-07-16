@@ -3,6 +3,13 @@
 Notable changes to csar. Terse by design — each entry points to the PR or
 commit that carries the full detail.
 
+## [0.1.1]
+
+- First PyPI release. Enable OIDC trusted-publishing upload in the `wheels`
+  workflow (`to-pypi` job, runs on a published GitHub release). No functional
+  change from 0.1.0 — the 0.1.0 tag predates the publish job, so this is the
+  first version pushed to PyPI.
+
 ## [0.1.0]
 
 - Initial release of `csar` (conic spherical aspect ratio): Python bindings
