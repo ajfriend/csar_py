@@ -1,7 +1,12 @@
 [build-system]
 # meson-python drives meson, which compiles the Cython extension and
 # links it against the Zig static archive.
-requires = ["meson-python>=0.16", "ziglang>=0.15.2", "cython>=3.0"]
+# ziglang is pinned to a minor: the toolchain wheel tracks zig
+# releases, and a floating bound silently retools every isolated
+# source build the day a new minor lands on PyPI (0.16.0 did exactly
+# that). Bump the pin deliberately, together with the vendored Zig
+# code it compiles.
+requires = ["meson-python>=0.16", "ziglang>=0.15.2,<0.16", "cython>=3.0"]
 build-backend = "mesonpy"
 
 [project]
@@ -49,7 +54,7 @@ dev = ["pytest>=8", "pytest-cov>=5", "matplotlib>=3"]  # matplotlib: test plot_c
 # passes `--no-build-isolation-package csar` so a rebuild reuses these from the
 # venv (~4s) instead of re-staging a fresh isolated build env (~9s). CI and
 # `uv build` don't sync it; they use normal build isolation.
-build = ["meson-python>=0.16", "ninja", "cython>=3.0", "ziglang>=0.15.2"]
+build = ["meson-python>=0.16", "ninja", "cython>=3.0", "ziglang>=0.15.2,<0.16"]  # keep in sync with [build-system].requires
 # scripts/states + scripts/countries — geopandas-loaded vector examples.
 geo = ["matplotlib>=3", "geopandas>=1", "pyogrio"]
 
