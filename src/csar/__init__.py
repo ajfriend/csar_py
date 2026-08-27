@@ -9,11 +9,11 @@ Public API:
     to_vec3(points, *, geo=...) -> np.ndarray
     plot_cone(result, geometry, ...) -> Axes        (needs matplotlib)
     project_to_cone(result, points, ...) -> (xy, semi)
-    Outcome = Converged | Infeasible | DidNotConverge
+    Outcome = Converged | Infeasible | DidNotConverge | PrecisionFloor
 """
 
 from .convert import to_vec3
-from .outcomes import Converged, DidNotConverge, Infeasible, Outcome
+from .outcomes import Converged, DidNotConverge, Infeasible, Outcome, PrecisionFloor
 from .plot import plot_cone, project_to_cone
 from .solver import solve
 
@@ -26,4 +26,5 @@ __all__ = [
     'Converged',
     'Infeasible',
     'DidNotConverge',
+    'PrecisionFloor',
 ]

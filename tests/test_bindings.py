@@ -189,25 +189,55 @@ def test_infeasible_when_no_hemisphere_contains_points():
 
 
 def test_did_not_converge_exposes_uncertified_diagnostics():
-    # An unreachable gap tolerance (far below the f64 conditioning
-    # floor) forces the solver to exhaust its iteration budget.
+    # The irregular triple from csar_zig's examples/status.zig: with an
+    # unreachable gap tolerance and an iteration budget of one, the
+    # budget runs out before the iterate reaches the f64 floor.
     pts = np.array([
-        [80.0, -40.0],
-        [82.0,   0.0],
-        [80.0,  40.0],
-        [85.0,   0.0],
+        [1.0, 0.0, 0.0],
+        [0.1, 0.97, 0.2],
+        [-0.2, 0.3, 0.93],
     ])
-    # Pinned to the alternating path, whose contract is outer_iters ==
-    # max_outer on DNC (the trust path's iteration count is its own).
-    r = csar.solve(pts, gap_tol=1e-300, max_outer=5, method='alternating')
+    pts /= np.linalg.norm(pts, axis=1, keepdims=True)
+    r = csar.solve(pts, geo='vec3', gap_tol=1e-20, max_outer=1)
     assert isinstance(r, csar.DidNotConverge)
     assert r.status == 'did_not_converge'
     assert r.converged is False
     assert r.Q.shape == (3, 3) and r.sigma.shape == (3,)
-    assert r.outer_iters == 5
-    assert r.method == 'alternating'
+    assert r.gap_floor > 0.0
+    assert r.method == 'trust'
     # Uncertified: the aspect_ratio accessor is deliberately withheld.
     assert not hasattr(r, 'aspect_ratio')
+
+
+# A hexagon ~4e-10 rad across (an H3 r15-scale cell): its certificate's
+# f64 floor sits above the default tolerance, so the cone is found but
+# cannot be certified. Fixture copied from csar_zig's
+# examples/status.zig (where it is `tiny_hex`, and in its
+# tests/neg_gap_test.zig as HEX1) — that repo owns the numbers; here
+# it is just an input that reaches PrecisionFloor.
+TINY_HEX_XYZ = np.array([
+    [0.6746833027403286, 0.7369617968776201, -0.04110658032859652],
+    [0.674683302801862, 0.7369617968319514, -0.04110658013740184],
+    [0.6746833029130066, 0.736961796730196, -0.04110658013746045],
+    [0.674683302962618, 0.7369617966741094, -0.04110658032871372],
+    [0.6746833029010845, 0.7369617967197781, -0.041106580519908585],
+    [0.6746833027899399, 0.7369617968215336, -0.04110658051984987],
+])
+
+
+def test_precision_floor_reports_the_floor_to_loosen_toward():
+    r = csar.solve(TINY_HEX_XYZ, geo='vec3')
+    assert isinstance(r, csar.PrecisionFloor)
+    assert r.status == 'precision_floor'
+    assert r.converged is False
+    # The floor is above the default tolerance — that's why this
+    # outcome exists — and it names the tolerance that would certify.
+    assert r.gap_floor > csar._cy.DEFAULT_GAP_TOL
+    assert r.Q.shape == (3, 3) and r.sigma.shape == (3,)
+    assert not hasattr(r, 'aspect_ratio')
+    # Loosening gap_tol above the reported floor certifies.
+    r2 = csar.solve(TINY_HEX_XYZ, geo='vec3', gap_tol=r.gap_floor * 10)
+    assert isinstance(r2, csar.Converged)
 
 
 class _Geo:
@@ -430,7 +460,7 @@ def test_exactly_coplanar_rejected_on_every_path_even_bypassed():
     # Rank-deficiency is an input property, decided once in preprocessing:
     # bypassing the near-coplanar check does NOT let exactly-degenerate
     # input through to any solver path (csar_zig).
-    for method in ('alternating', 'trust', 'auto'):
+    for method in ('trust', 'auto'):
         with pytest.raises(ValueError, match='coplanar'):
             csar.solve(COPLANAR_ARC_DEG, coplanarity_tol=0.0, method=method)
 
@@ -442,7 +472,7 @@ def test_near_coplanar_check_can_be_bypassed():
     with pytest.raises(ValueError, match='coplanar'):
         csar.solve(NEAR_COPLANAR_ARC_DEG)
     r = csar.solve(NEAR_COPLANAR_ARC_DEG, coplanarity_tol=0.0)
-    assert r.status in {'converged', 'infeasible', 'did_not_converge'}
+    assert r.status in {'converged', 'infeasible', 'did_not_converge', 'precision_floor'}
 
 
 def test_invalid_tolerance():
@@ -452,25 +482,23 @@ def test_invalid_tolerance():
 
 # ---- solver-path selection (method=) --------------------------------------
 
-def test_method_auto_is_the_recommended_path():
-    # 'auto' is upstream's alias for the recommended method — currently
-    # the trust path (csar_zig). Identical outcome to asking
-    # for 'trust' explicitly.
-    t = csar.solve(OCTANT_XYZ, geo='vec3', method='trust')
+def test_method_auto_resolves_to_a_concrete_path():
+    # 'auto' is upstream's alias for its recommended method, and WHICH
+    # path that is may change between csar minor versions — upstream
+    # pins that. What this binding owes: a concrete path name comes
+    # back, and asking for it explicitly gives the same outcome.
     auto = csar.solve(OCTANT_XYZ, geo='vec3')   # default method='auto'
-    assert auto.method == 'trust'
-    assert auto.sigma == pytest.approx(t.sigma)
-    assert auto.gap == t.gap
-    assert auto.outer_iters == t.outer_iters
+    assert auto.method in csar._cy._METHOD_CODE
+    same = csar.solve(OCTANT_XYZ, geo='vec3', method=auto.method)
+    assert same.sigma == pytest.approx(auto.sigma)
+    assert same.gap == auto.gap
+    assert same.outer_iters == auto.outer_iters
 
 
 def test_method_trust_converges_and_reports_path():
     r = csar.solve(OCTANT_XYZ, geo='vec3', method='trust')
     assert r.status == 'converged'
     assert r.method == 'trust'
-    # Same cone as the alternating path, to certification tolerance.
-    a = csar.solve(OCTANT_XYZ, geo='vec3', method='alternating')
-    assert r.aspect_ratio == pytest.approx(a.aspect_ratio, abs=1e-6)
 
 
 def test_method_invalid_rejected():

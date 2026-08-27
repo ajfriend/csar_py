@@ -1,6 +1,6 @@
 """Result types returned by `solve`.
 
-`solve` returns one of the three classes below — never a shared object
+`solve` returns one of the four classes below — never a shared object
 with None-valued fields. Each carries only the data meaningful for its
 outcome, so reading e.g. ``.aspect_ratio`` on an `Infeasible` is an
 immediate AttributeError (and a static type error under isinstance/match
@@ -20,7 +20,7 @@ truth value, so these compare by identity instead.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, get_args
 
 import numpy as np
 
@@ -43,18 +43,17 @@ class Converged:
         gap: certified duality gap (``<=`` the ``gap_tol`` passed to
             ``solve``).
         outer_iters: total solver iterations for the path that produced
-            this outcome (outer iterations on ``'alternating'``; trust
-            iterations + re-certification attempts on ``'trust'``).
-        method: which solver path produced this outcome —
-            ``'alternating'`` or ``'trust'``. Under ``method='auto'``
-            this is the concrete path the alias resolved to.
+            this outcome.
+        method: which solver path produced this outcome — currently
+            always ``'trust'``. Under ``method='auto'`` this is the
+            concrete path the alias resolved to.
     """
 
     sigma: np.ndarray
     Q: np.ndarray
     gap: float
     outer_iters: int
-    method: Literal['alternating', 'trust']
+    method: Literal['trust']
     status: ClassVar[Literal['converged']] = 'converged'
     converged: ClassVar[bool] = True
 
@@ -81,11 +80,13 @@ class Infeasible:
 
 @dataclass(frozen=True, eq=False, slots=True)
 class DidNotConverge:
-    """The solver hit ``max_outer`` without certifying a cone. The last
-    iterate is exposed for diagnostics / warm-start, but it is **not** a
-    certified result — there is deliberately no ``aspect_ratio`` here.
-    Compute ``sigma[2] / sigma[1]`` from ``sigma`` yourself if you want
-    the uncertified estimate.
+    """The solver stopped with the gap still above this input's
+    ``gap_floor``: the iteration budget (``max_outer``) ran out, or the
+    search went stationary short of the floor. The last iterate is
+    exposed for diagnostics / warm-start, but it is **not** a certified
+    result — there is deliberately no ``aspect_ratio`` here. Compute
+    ``sigma[2] / sigma[1]`` from ``sigma`` yourself if you want the
+    uncertified estimate. Remedy: raise ``max_outer``.
 
     Attributes:
         sigma: ``(3,)`` last-iterate eigenvalues (see `Converged`),
@@ -96,37 +97,65 @@ class DidNotConverge:
             below ``gap_tol``; inspect alongside ``outer_iters``. The
             sentinel value ``1e30`` means no certificate could ever be
             constructed (``Q``/``sigma`` carry no information then).
+        gap_floor: the smallest gap certifiable at f64 for this input's
+            geometry.
         outer_iters: total iterations run by the path that produced this
-            outcome (see `Converged.outer_iters`).
-        method: which solver path produced this outcome —
-            ``'alternating'`` or ``'trust'`` (see `Converged.method`).
+            outcome.
+        method: which solver path produced this outcome (see
+            `Converged.method`).
     """
 
     sigma: np.ndarray
     Q: np.ndarray
     gap: float
+    gap_floor: float
     outer_iters: int
-    method: Literal['alternating', 'trust']
+    method: Literal['trust']
     status: ClassVar[Literal['did_not_converge']] = 'did_not_converge'
     converged: ClassVar[bool] = False
 
 
-# Union of the three outcomes — use as the return annotation and for
+@dataclass(frozen=True, eq=False, slots=True)
+class PrecisionFloor:
+    """``gap_tol`` is below what f64 can certify for this input
+    (``gap_floor``), and the iterate is at that floor. The cone is as
+    accurate as the input allows — only the certificate is missing.
+    Raising ``max_outer`` changes nothing; loosen ``gap_tol`` (e.g. to
+    just above ``gap_floor``) to get a `Converged` instead. Same payload
+    as `DidNotConverge`, and like it, deliberately no ``aspect_ratio``.
+
+    Attributes:
+        gap_floor: the smallest gap certifiable at f64 for this input's
+            geometry — here, the tolerance to loosen toward.
+        sigma, Q, gap, outer_iters, method: see `DidNotConverge`.
+    """
+
+    sigma: np.ndarray
+    Q: np.ndarray
+    gap: float
+    gap_floor: float
+    outer_iters: int
+    method: Literal['trust']
+    status: ClassVar[Literal['precision_floor']] = 'precision_floor'
+    converged: ClassVar[bool] = False
+
+
+# Union of the four outcomes — use as the return annotation and for
 # `isinstance(x, Outcome)` (a native `|` union is a types.UnionType,
 # which supports isinstance checks on py>=3.10).
-Outcome = Converged | Infeasible | DidNotConverge
+Outcome = Converged | Infeasible | DidNotConverge | PrecisionFloor
 
 
-def build(status, sigma, q, gap, outer_iters, residual, method) -> Outcome:
-    """Assemble the typed `Outcome` from the raw `_cy.solve` tuple."""
-    if status == 'infeasible':
-        return Infeasible(residual=residual)
-    # converged and did_not_converge share the same payload shape.
-    cls = Converged if status == 'converged' else DidNotConverge
-    return cls(
-        sigma=np.asarray(sigma, dtype=float),
-        Q=np.asarray(q, dtype=float).reshape(3, 3),  # row-major Q[r, c]
-        gap=gap,
-        outer_iters=outer_iters,
-        method=method,
-    )
+# Derived from the union, keyed by each class's own `status` ClassVar:
+# the roster and the spellings each have one source.
+_STATUS_CLS = {cls.status: cls for cls in get_args(Outcome)}
+
+
+def build(status, **fields) -> Outcome:
+    """Assemble the typed `Outcome` from `_cy.solve`'s payload dict.
+
+    `_cy.solve` returns exactly the fields the outcome defines, by
+    name — a field mismatch fails loudly here as a TypeError rather
+    than transposing values positionally.
+    """
+    return _STATUS_CLS[status](**fields)

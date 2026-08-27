@@ -3,6 +3,16 @@
 Notable changes to csar. Terse by design — each entry points to the PR or
 commit that carries the full detail.
 
+## [Unreleased]
+
+- **Breaking**: `method='alternating'` is gone — upstream retired that
+  solver path. `method` is `'trust'` or `'auto'`.
+- New `PrecisionFloor` outcome (`gap_tol` below what f64 can certify
+  for the input); `Outcome` is now a four-way union, and both
+  uncertified outcomes carry `gap_floor`.
+- Builds against `csar_abi` (C ABI) v0.1.1, pinning csar 0.5.0; the
+  vendored C shim is gone.
+
 ## [0.1.1]
 
 - First PyPI release. Enable OIDC trusted-publishing upload in the `wheels`

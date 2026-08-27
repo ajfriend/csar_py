@@ -19,8 +19,13 @@ reinstall:
     -uv pip uninstall csar
     just _rm '_csar_editable_loader.py'
     just _rm 'csar-editable.pth'
-    just _rm build
-    just _rm .zig-cache
+    # Only THIS repo's meson-python build dir. An unscoped `_rm build`
+    # also matches src/zig/.zig-cache/o/<hash>/build — zig's compiled
+    # build runner — which corrupts the cache (the next build dies with
+    # "failed to spawn build runner"), so it used to need a
+    # `_rm .zig-cache` chaser. Keeping zig's cache warm is worth ~5s of
+    # every ~8s cycle (measured); `just purge` still clears it.
+    -rm -rf ./build
     uv sync --reinstall-package csar --no-build-isolation-package csar --group build
 
 # rebuild (pick up source changes) + run the suite

@@ -5,22 +5,20 @@ the typed `Outcome`.
 from typing import Literal
 
 from . import _cy  # Cython extension
-from . import outcomes
 from .convert import Geo, to_vec3
-from .outcomes import Outcome
+from .outcomes import Outcome, build
 
-Method = Literal['alternating', 'trust', 'auto']
-_METHOD_CODE = {'alternating': 0, 'trust': 1, 'auto': 2}
+Method = Literal['trust', 'auto']
 
 
 def solve(
     points,
     *,
     geo: Geo = 'latlng',
-    gap_tol: float = 1e-6,
-    n_hull: int = 10,
-    coplanarity_tol: float = 1e-12,
-    max_outer: int = 100,
+    gap_tol: float = _cy.DEFAULT_GAP_TOL,
+    n_hull: int = _cy.DEFAULT_N_HULL,
+    coplanarity_tol: float = _cy.DEFAULT_COPLANARITY_TOL,
+    max_outer: int = _cy.DEFAULT_MAX_OUTER,
     method: Method = 'auto',
 ) -> Outcome:
     """Find the tightest ellipsoidal cone enclosing a point set on the
@@ -41,28 +39,24 @@ def solve(
             `0` always hulls.
         coplanarity_tol: rejects near-coplanar input (points ~on a
             great circle) as `ValueError`. Pass `<= 0` to bypass.
-        max_outer: outer-iteration cap before returning a
-            `'did_not_converge'` result.
+        max_outer: iteration cap; exhausting it yields
+            `DidNotConverge`. It is not the remedy for
+            `PrecisionFloor` — loosen `gap_tol` there.
         method: solver path. `'auto'` (the default) resolves to the
-            library's recommended method for the pinned csar_zig
-            version — currently `'trust'`, a trust-region descent that
-            converges on every input family constructed to date,
-            including the wide-angle/elongated inputs the original
-            solver structurally cannot. `'alternating'` is that
-            original solver, kept for continuity (bit-stable with
-            pre-0.6.0 defaults) and for large dense near-circular
-            inputs where it can still be faster. The outcome's
-            `.method` records the concrete path that ran. Near the f64
-            gap floor (finest-resolution cells), WHICH cells certify at
-            a strict `gap_tol` differs between paths at noise level;
-            aspect ratios agree wherever both certify.
+            library's recommended method for the pinned csar version —
+            currently `'trust'`, a trust-region descent that converges
+            on every input family constructed to date, including
+            wide-angle/elongated inputs. The resolution may change
+            between csar minor versions; pin `'trust'` explicitly if
+            you need version-stable solver behavior. The outcome's
+            `.method` records the concrete path that ran.
 
     Returns:
-        One of `Converged`, `Infeasible`, or `DidNotConverge`
-        (collectively `Outcome`). Dispatch with `isinstance` or
-        `match`/`case`; each type exposes only the fields meaningful for
-        its outcome, so there are no `None`-valued fields to guard
-        against::
+        One of `Converged`, `Infeasible`, `DidNotConverge`, or
+        `PrecisionFloor` (collectively `Outcome`). Dispatch with
+        `isinstance` or `match`/`case`; each type exposes only the
+        fields meaningful for its outcome, so there are no
+        `None`-valued fields to guard against::
 
             r = csar.solve(pts)
             match r:
@@ -71,20 +65,18 @@ def solve(
                 case csar.Infeasible():
                     handle(r.residual)
                 case csar.DidNotConverge():
-                    retry(r.gap, r.outer_iters)
+                    retry(r.gap, r.outer_iters)      # raise max_outer
+                case csar.PrecisionFloor():
+                    accept(r.sigma, r.gap_floor)     # or loosen gap_tol
 
     Raises:
         ValueError: invalid `geo` or `method`, mismatched shape, fewer
             than 3 points, non-finite/negative tolerance, or
             near-coplanar input.
     """
-    if method not in _METHOD_CODE:
-        raise ValueError(
-            f"csar: method must be 'alternating', 'trust', or 'auto'; got {method!r}"
-        )
     X = to_vec3(points, geo=geo)
     raw = _cy.solve(
         X, float(gap_tol), int(n_hull), float(coplanarity_tol), int(max_outer),
-        _METHOD_CODE[method],
+        method,
     )
-    return outcomes.build(*raw)
+    return build(**raw)
