@@ -1,8 +1,7 @@
-//! Builds libcsar.{a,lib}: a static archive that exposes the csar Zig
-//! package's `solve` via a C ABI for the Cython extension to link
-//! against. The upstream csar source is resolved from the dependency
-//! pinned in build.zig.zon — a local `.path` during development, a
-//! URL+hash for releases.
+//! Installs libcsar.{a,lib} + csar.h for the Cython extension to
+//! compile and link against. Both come from csar_abi — the ABI repo
+//! that owns the C door surface — pinned in build.zig.zon; this repo
+//! no longer carries a shim of its own.
 
 const std = @import("std");
 
@@ -10,34 +9,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const csar_mod = b.dependency("csar", .{
+    const abi = b.dependency("csar_abi", .{
         .target = target,
         .optimize = optimize,
-    }).module("csar");
-
-    const cabi_mod = b.createModule(.{
-        .root_source_file = b.path("c_api.zig"),
-        .target = target,
-        .optimize = optimize,
-        // csar.solve allocates; the shim hands it std.heap.c_allocator.
-        .link_libc = true,
-        // The static archive ends up linked into a Python extension
-        // (.so / .pyd), itself a shared library — its objects must be
-        // position-independent.
-        .pic = true,
-        .imports = &.{
-            .{ .name = "csar", .module = csar_mod },
-        },
     });
-
-    // Static lib pulled into the Cython extension at link time. Avoids
-    // the Windows MSVC CRT mismatch and the macOS dylib __dso_handle
-    // regression that shipping a Zig *dynamic* library triggers — the
-    // same rationale documented in the sibling sparea_py bindings.
-    const lib = b.addLibrary(.{
-        .name = "csar",
-        .linkage = .static,
-        .root_module = cabi_mod,
-    });
-    b.installArtifact(lib);
+    // Named paths, not the artifact: csar_abi repacks the archive for
+    // Apple's ld on macOS targets and exposes the consumable result
+    // as `lib` (its dev.md "The archive and Apple's linker").
+    const lib_name = if (target.result.os.tag == .windows) "csar.lib" else "libcsar.a";
+    b.getInstallStep().dependOn(&b.addInstallLibFile(abi.namedLazyPath("lib"), lib_name).step);
+    b.getInstallStep().dependOn(&b.addInstallHeaderFile(abi.namedLazyPath("header"), "csar.h").step);
 }

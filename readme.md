@@ -134,25 +134,28 @@ match csar.solve(pts):
         handle(i.residual)            # no enclosing cone exists
     case csar.DidNotConverge() as d:
         retry(d.gap, d.outer_iters)   # hit the iteration cap
+    case csar.PrecisionFloor() as p:
+        accept(p.sigma, p.gap_floor)  # f64 can't certify tighter; or loosen gap_tol
 ```
 
 On a `Converged`, `sigma` is the `(3,)` eigenvalue array and `Q` the
 `(3, 3)` eigenbasis (column `i` pairs with `sigma[i]`; column 0 is the
 axis), so the enclosing ellipsoid matrix is
-`A = c.Q @ np.diag(c.sigma) @ c.Q.T`. `DidNotConverge` exposes the same
-`sigma`/`Q`/`gap` for diagnostics but, being uncertified, deliberately
-has no `aspect_ratio`. See the docstrings in `src/csar/__init__.py` for
-the full field reference.
+`A = c.Q @ np.diag(c.sigma) @ c.Q.T`. The two uncertified outcomes
+(`DidNotConverge`, `PrecisionFloor`) expose the same `sigma`/`Q`/`gap`
+plus `gap_floor` for diagnostics but, being uncertified, deliberately
+have no `aspect_ratio`. See the docstrings in `src/csar/__init__.py`
+for the full field reference.
 
 ## Solver paths
 
 `solve` picks its solver via `method=`: `'auto'` (the default) resolves
 to the library's recommended method — currently `'trust'`, a
 trust-region descent that converges on every input family constructed
-to date, including the wide/elongated inputs the original solver
-structurally cannot. `'alternating'` is that original solver, kept for
-continuity and for large dense near-circular inputs where it can still
-be faster. The outcome's `.method` records the concrete path that ran.
+to date, including wide/elongated inputs. The resolution may change
+between csar minor versions; pin `'trust'` explicitly for
+version-stable solver behavior. The outcome's `.method` records the
+concrete path that ran.
 
 ## Layout
 
@@ -166,13 +169,12 @@ be faster. The outcome's `.method` records the concrete path that ran.
 │   ├── csar/
 │   │   ├── __init__.py     — gathers the public API (solve, to_vec3, plot_cone, Outcome…)
 │   │   ├── convert.py      — input → (N, 3) unit vectors: to_vec3, geo-interface
-│   │   ├── outcomes.py     — Converged/Infeasible/DidNotConverge + build()
+│   │   ├── outcomes.py     — Converged/Infeasible/DidNotConverge/PrecisionFloor + build()
 │   │   ├── plot.py         — plot_cone (optional; needs matplotlib)
 │   │   └── solver.py       — solve(): convert → _cy.solve → build
 │   └── zig/
-│       ├── build.zig       — produces libcsar.{a,lib} (static archive)
-│       ├── build.zig.zon   — pins the csar_zig dependency
-│       └── c_api.zig       — pub export fn csar_solve
+│       ├── build.zig       — installs libcsar.{a,lib} + csar.h from csar_abi
+│       └── build.zig.zon   — pins the csar_abi dependency
 ├── scripts/                — examples (run via `just states|countries`)
 │   ├── states/             — US-state aspect ratios (geopandas + csar)
 │   └── countries/          — country aspect ratios (geopandas + csar)

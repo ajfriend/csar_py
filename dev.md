@@ -5,8 +5,9 @@ contributor workflows for `csar`.
 
 ## Architecture
 
-A thin Cython binding around a small C-ABI shim that calls into the
-upstream `csar_zig` package. The Python side accepts points as
+A thin Cython binding over `csar_abi` — the ABI repo that owns the C
+door surface over the upstream `csar` solver. The Python side accepts
+points as
 `(lat, lng)` (degrees by default) or unit `(x, y, z)` vectors,
 normalizes them to a contiguous `(N, 3)` float64 buffer with NumPy,
 and hands that buffer to the Cython extension via a typed memoryview
@@ -14,16 +15,21 @@ and hands that buffer to the Cython extension via a typed memoryview
 row layout, so the shim reinterprets the pointer with no per-element
 conversion.
 
-The C-ABI shim (`src/zig/c_api.zig`) and `src/zig/build.zig` both live
-here, not in the upstream `csar_zig` package. The split is
-intentional:
+The C ABI itself lives in neither this repo nor the solver — the
+split is three layers, each intentional:
 
 - **`csar_zig` (upstream)**: pure Zig solver library. Exports a
   `Module` for other Zig code; no C ABI, no shared library.
-- **`csar` (this repo)**: depends on `csar_zig` via
-  `build.zig.zon`, wraps it in a tiny C ABI (`csar_solve`), builds a
-  static archive, and links it directly into the Cython extension
-  `_cy.<EXT>`.
+- **`csar_abi`**: the one C door surface (`csar_solve`, the
+  `csar_result` struct, the code tables, `csar.h`), built as a static
+  archive for native hosts and a wasm module for browsers, with a
+  CI gate keeping the declarations in lockstep. Pins `csar_zig` by
+  tag.
+- **`csar` (this repo)**: depends on `csar_abi` via
+  `build.zig.zon`, installs its archive + `csar.h`, and links the
+  archive directly into the Cython extension `_cy.<EXT>`. `_cy.pyx`
+  declares everything — prototypes, code tables, defaults — from
+  `csar.h`, so no integer the ABI speaks is hand-copied here.
 
 libcsar is a **static** archive (not a shared library) so it gets
 pulled into `_cy.so` / `_cy.pyd` at link time. That sidesteps both the
@@ -31,47 +37,39 @@ Windows MSVC CRT mismatch and the macOS dylib `__dso_handle`
 regression that shipping a Zig *dynamic* library triggers — the same
 rationale as the sibling `sparea_py` bindings.
 
-### What the shim exposes (minimal surface)
+### What the ABI exposes (minimal surface)
 
 `csar.solve` (Zig) returns a tagged `Outcome` union (`converged` /
-`infeasible` / `did_not_converge`), not a single scalar. The shim
-writes a `status` discriminator plus the per-variant payload into C
-out-params:
-
-| out-param     | converged | did_not_converge | infeasible |
-| ------------- | :-------: | :--------------: | :--------: |
-| `status`      |     ✓     |        ✓         |     ✓      |
-| `sigma` (3)   |     ✓     |        ✓         |     —      |
-| `q` (9)       |     ✓     |        ✓         |     —      |
-| `gap`         |     ✓     |   ✓ (uncertif.)  |     —      |
-| `outer_iters` |     ✓     |        ✓         |     —      |
-| `residual`    |     —     |        —         |     ✓      |
-
-Outputs not meaningful for a variant are left as NaN / 0. The cone axis
+`infeasible` / `did_not_converge` / `precision_floor`), not a single
+scalar. `csar_solve` writes a caller-allocated `csar_result` struct —
+`status` plus the per-variant payload (`sigma`, `q`, `gap`,
+`gap_floor`, `residual`, `n_iters`, `method`); which fields a status
+defines is documented on the struct in `csar.h`, and fields a variant
+doesn't define hold NaN / sentinel values. The cone axis
 (`Q[:, 0]`) and aspect ratio (`sigma[2]/sigma[1]`) are derivable, so
 they're **not** in the ABI — they're computed Python-side.
 
-The Python wrapper turns the `status` discriminator into one of three
-classes — `Converged`, `Infeasible`, `DidNotConverge` (union alias
-`Outcome`) — each holding only its variant's fields. This mirrors the
+The Python wrapper turns the `status` discriminator into one of four
+classes — `Converged`, `Infeasible`, `DidNotConverge`,
+`PrecisionFloor` (union alias `Outcome`) — each holding only its
+variant's fields. This mirrors the
 Zig tagged union: there is no shared object with `None`-valued fields,
 so reading e.g. `aspect_ratio` on an `Infeasible` is an `AttributeError`
 (and a static type error under `isinstance`/`match` narrowing) rather
 than a silent `None`. `aspect_ratio` is a property on `Converged` only —
-`DidNotConverge` withholds it because its iterate is uncertified, just
-as the Zig `Converged` variant alone has the `aspectRatio()` method.
+the uncertified outcomes withhold it, just as the Zig `Converged`
+variant alone has the `aspectRatio()` method.
 
-The variable-length active-set **certificate** (`cert.indices` /
-`cert.lambdas`) is deliberately **not** surfaced — the shim frees it
-via `outcome.deinit()` before returning. Exposing it would mean a
-caller-owned-buffer protocol across the C boundary; defer that until a
-consumer needs it. `checkFeasibility` is likewise not yet wired up.
+The active-set **certificate** (the dual multipliers) is not surfaced
+through the Python API yet: `csar_solve` takes a nullable
+`out_lambdas` and this binding passes NULL — the door is there when a
+consumer asks.
 
-The shim's `c_int` return value is the errors-vs-outcome split from
-`csar_zig/src/api.zig`: `0` = "ran, see `status`"; non-zero = "could
-not run" (insufficient points, invalid tolerance, coplanar input, OOM,
-or an internal PSD/duality violation). `_cy.pyx` maps each non-zero
-code to the matching Python exception.
+`csar_solve`'s return value is the errors-vs-outcome split from
+upstream: `CSAR_OK` = "ran, see `status`"; other codes = "could not
+run" (insufficient points, invalid tolerance, coplanar input, OOM, or
+an internal PSD/duality violation). `_cy.pyx` maps each to the
+matching Python exception, by the header's names.
 
 ## Layout
 
@@ -86,13 +84,12 @@ code to the matching Python exception.
 │   ├── csar/
 │   │   ├── __init__.py     — gathers the public API (solve, to_vec3, plot_cone, Outcome…)
 │   │   ├── convert.py      — input → (N, 3) unit vectors: to_vec3, geo-interface
-│   │   ├── outcomes.py     — Converged/Infeasible/DidNotConverge + build()
+│   │   ├── outcomes.py     — the four Outcome classes + build()
 │   │   ├── plot.py         — plot_cone (optional matplotlib helper)
 │   │   └── solver.py       — solve(): convert → _cy.solve → build
 │   └── zig/
-│       ├── build.zig       — produces libcsar.{a,lib} (static archive)
-│       ├── build.zig.zon   — pins the csar_zig dependency
-│       └── c_api.zig       — pub export fn csar_solve
+│       ├── build.zig       — installs libcsar.{a,lib} + csar.h from csar_abi
+│       └── build.zig.zon   — pins the csar_abi dependency
 ├── scripts/                — examples (own dep groups; not part of the wheel)
 │   ├── states/             — US-state aspect ratios (`just states`)
 │   └── countries/          — country aspect ratios (`just countries`)
@@ -150,36 +147,38 @@ rebuild-on-import, but that hook shells out to `ninja` and is fragile under
 uv's build isolation (stale `ninja` path → `FileNotFoundError`); not worth
 the machinery for a ~4s gap.
 
-## The csar_zig dependency: release pin vs. local path
+## The csar_abi dependency: release pin vs. local path
 
-`src/zig/build.zig.zon` pins the upstream `csar` package. The repo ships
-a **URL+hash pin to a released tag** — the form wheels/CI need, since
-they build from an isolated sdist copy that can't see a sibling checkout:
+`src/zig/build.zig.zon` pins `csar_abi` (which in turn pins the
+`csar` solver by tag — bumping the solver happens there, not here).
+The repo ships a **URL+hash pin to a released tag** — the form
+wheels/CI need, since they build from an isolated sdist copy that
+can't see a sibling checkout:
 
 ```zig
-.csar = .{
-    .url = "https://github.com/ajfriend/csar_zig/archive/refs/tags/v0.1.0.tar.gz",
-    .hash = "csar-0.1.0-...",
+.csar_abi = .{
+    .url = "https://github.com/ajfriend/csar_abi/archive/refs/tags/v0.1.0.tar.gz",
+    .hash = "csar_abi-0.1.0-...",
 },
 ```
 
 To **co-develop both repos**, temporarily swap to a local path — no
 network, no GitHub needed. `just test` / `uv sync` resolve it in-place;
 only sdist/wheel builds (`uv build`, `just wheel`, CI) need the URL form,
-since they build from a temp dir where `../../../csar_zig` doesn't exist:
+since they build from a temp dir where `../../../csar_abi` doesn't exist:
 
 ```zig
-.csar = .{ .path = "../../../csar_zig" },   // relative to src/zig/
+.csar_abi = .{ .path = "../../../csar_abi" },   // relative to src/zig/
 ```
 
-To **bump to a newer csar_zig** (or restore the URL pin after local dev):
+To **bump to a newer csar_abi** (or restore the URL pin after local dev):
 
 ```sh
-cd src/zig && zig fetch --save=csar \
-  https://github.com/ajfriend/csar_zig/archive/refs/tags/vX.Y.Z.tar.gz
+cd src/zig && zig fetch --save=csar_abi \
+  https://github.com/ajfriend/csar_abi/archive/refs/tags/vX.Y.Z.tar.gz
 ```
 
-That rewrites `dependencies.csar` to `.url` + `.hash`; re-run `just test`.
+That rewrites `dependencies.csar_abi` to `.url` + `.hash`; re-run `just test`.
 Caveat: if the existing entry is a `.path`, `--save` overwrites the path
 *value* with the URL and adds no hash — first clear it to
 `.dependencies = .{}`, then fetch.
@@ -193,7 +192,7 @@ Caveat: if the existing entry is a `.path`, `--save` overwrites the path
   PyPI via OIDC trusted publishing.
 
 Both build from an isolated sdist using the URL+hash pin above, so they
-need `csar_zig` pushed and tagged on GitHub (it is). If you switch to a
+need `csar_abi` pushed and tagged on GitHub (it is). If you switch to a
 local `.path` for co-development, the in-place `test` workflow's
 `uv sync` still works, but the `wheels` sdist build won't until you
 restore the URL pin.
@@ -212,7 +211,7 @@ publishing (no API tokens), gated by the repo's `pypi` GitHub environment
 
 Steps:
 
-1. **Pin a released `csar_zig`** (see above) if bumping the solver, and commit.
+1. **Pin a released `csar_abi`** (see above) if bumping the ABI or solver, and commit.
 2. **Bump `[project] version`** in `pyproject.toml`, add a `changelog.md`
    entry, commit + push to `main`. Wait for `test` and `wheels` to go green.
 3. **Create a GitHub release**: tag `vX.Y.Z` (matching the pyproject version),
@@ -230,7 +229,7 @@ GitHub-only and predates the publish job, is not on PyPI: PyPI starts at
 ### What ships in the artifacts
 
 - **Wheel:** the `csar/` package + the compiled `_cy` extension (with the
-  `csar_zig` static archive linked in) + metadata. Nothing else.
+  `csar_abi` static archive linked in) + metadata. Nothing else.
 - **Sdist:** build inputs (`pyproject.toml`, `meson.build`, `src/`), `tests/`,
   and `readme`/`LICENSE`/`changelog`. Repo/dev-only files (`.github/`,
   `justfile`, `dev.md`, `scripts/`, `.gitignore`) are kept out of the sdist via
