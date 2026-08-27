@@ -9,9 +9,8 @@ a spherical aspect-ratio solver. Given a point set on the unit sphere,
 it finds the tightest ellipsoidal cone enclosing the points and returns
 the cone's axis ratio.
 
-A thin Cython binding over a small C-ABI shim that links the upstream
-`csar` Zig package as a static archive — no separate shared library
-ships in the wheel.
+A thin Cython binding over `csar_abi`'s C door surface, linked as a
+static archive — no separate shared library ships in the wheel.
 
 ## Install
 
@@ -41,8 +40,9 @@ pip install git+https://github.com/ajfriend/csar_py.git@v0.1.1  # a tagged relea
 
 That path triggers a source build: meson-python pulls the Zig toolchain
 from the `ziglang` PyPI wheel (`python -m ziglang build`), compiles the
-upstream `csar_zig` package into a static archive — fetched over the
-network from the URL pinned in `src/zig/build.zig.zon` — then cythonizes
+`csar_abi` package (which pins the solver) into a static archive —
+fetched over the network from the URL pinned in
+`src/zig/build.zig.zon` — then cythonizes
 `src/cython/_cy.pyx` and links the result against it. No host-level Zig
 or Cython install is required (Python 3.11+).
 
@@ -120,11 +120,11 @@ csar.to_vec3([(0, 0), (0, 90), (90, 0)])
 
 ## Outcomes
 
-`solve` returns one of three outcome types — `Converged`, `Infeasible`,
-or `DidNotConverge` (collectively `Outcome`) — mirroring the Zig
-`Outcome` tagged union. Each carries **only** the fields meaningful for
-its outcome, so you dispatch on the type rather than guarding nullable
-fields:
+`solve` returns one of four outcome types — `Converged`, `Infeasible`,
+`DidNotConverge`, or `PrecisionFloor` (collectively `Outcome`) —
+mirroring the Zig `Outcome` tagged union. Each carries **only** the
+fields meaningful for its outcome, so you dispatch on the type rather
+than guarding nullable fields:
 
 ```python
 match csar.solve(pts):
@@ -144,7 +144,7 @@ axis), so the enclosing ellipsoid matrix is
 `A = c.Q @ np.diag(c.sigma) @ c.Q.T`. The two uncertified outcomes
 (`DidNotConverge`, `PrecisionFloor`) expose the same `sigma`/`Q`/`gap`
 plus `gap_floor` for diagnostics but, being uncertified, deliberately
-have no `aspect_ratio`. See the docstrings in `src/csar/__init__.py`
+have no `aspect_ratio`. See the docstrings in `src/csar/outcomes.py`
 for the full field reference.
 
 ## Solver paths

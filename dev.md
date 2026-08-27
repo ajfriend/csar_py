@@ -12,8 +12,8 @@ points as
 normalizes them to a contiguous `(N, 3)` float64 buffer with NumPy,
 and hands that buffer to the Cython extension via a typed memoryview
 (`double[:, ::1]`) — no copy. `[3]f64` on the Zig side is exactly that
-row layout, so the shim reinterprets the pointer with no per-element
-conversion.
+row layout, so `csar_solve` reinterprets the pointer with no
+per-element conversion.
 
 The C ABI itself lives in neither this repo nor the solver — the
 split is three layers, each intentional:
@@ -157,8 +157,8 @@ can't see a sibling checkout:
 
 ```zig
 .csar_abi = .{
-    .url = "https://github.com/ajfriend/csar_abi/archive/refs/tags/v0.1.0.tar.gz",
-    .hash = "csar_abi-0.1.0-...",
+    .url = "https://github.com/ajfriend/csar_abi/archive/refs/tags/vX.Y.Z.tar.gz",
+    .hash = "csar_abi-X.Y.Z-...",
 },
 ```
 

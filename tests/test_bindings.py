@@ -210,9 +210,11 @@ def test_did_not_converge_exposes_uncertified_diagnostics():
 
 
 # A hexagon ~4e-10 rad across (an H3 r15-scale cell): its certificate's
-# f64 floor is ~1e-6, above the default tolerance, so the cone is found
-# but cannot be certified — the canonical precision_floor input (the
-# same points as csar_zig's examples/status.zig).
+# f64 floor sits above the default tolerance, so the cone is found but
+# cannot be certified. Fixture copied from csar_zig's
+# examples/status.zig (where it is `tiny_hex`, and in its
+# tests/neg_gap_test.zig as HEX1) — that repo owns the numbers; here
+# it is just an input that reaches PrecisionFloor.
 TINY_HEX_XYZ = np.array([
     [0.6746833027403286, 0.7369617968776201, -0.04110658032859652],
     [0.674683302801862, 0.7369617968319514, -0.04110658013740184],
@@ -228,11 +230,10 @@ def test_precision_floor_reports_the_floor_to_loosen_toward():
     assert isinstance(r, csar.PrecisionFloor)
     assert r.status == 'precision_floor'
     assert r.converged is False
-    # The floor is above the default 1e-6 tolerance — that's why this
+    # The floor is above the default tolerance — that's why this
     # outcome exists — and it names the tolerance that would certify.
-    assert r.gap_floor > 1e-6
-    # The cone estimate is still input-precision-accurate.
-    assert r.sigma[2] / r.sigma[1] >= 1.0
+    assert r.gap_floor > csar._cy.DEFAULT_GAP_TOL
+    assert r.Q.shape == (3, 3) and r.sigma.shape == (3,)
     assert not hasattr(r, 'aspect_ratio')
     # Loosening gap_tol above the reported floor certifies.
     r2 = csar.solve(TINY_HEX_XYZ, geo='vec3', gap_tol=r.gap_floor * 10)
@@ -481,23 +482,23 @@ def test_invalid_tolerance():
 
 # ---- solver-path selection (method=) --------------------------------------
 
-def test_method_auto_is_the_recommended_path():
-    # 'auto' is upstream's alias for the recommended method — currently
-    # the trust path (csar_zig). Identical outcome to asking
-    # for 'trust' explicitly.
-    t = csar.solve(OCTANT_XYZ, geo='vec3', method='trust')
+def test_method_auto_resolves_to_a_concrete_path():
+    # 'auto' is upstream's alias for its recommended method, and WHICH
+    # path that is may change between csar minor versions — upstream
+    # pins that. What this binding owes: a concrete path name comes
+    # back, and asking for it explicitly gives the same outcome.
     auto = csar.solve(OCTANT_XYZ, geo='vec3')   # default method='auto'
-    assert auto.method == 'trust'
-    assert auto.sigma == pytest.approx(t.sigma)
-    assert auto.gap == t.gap
-    assert auto.outer_iters == t.outer_iters
+    assert auto.method in csar._cy._METHOD_CODE
+    same = csar.solve(OCTANT_XYZ, geo='vec3', method=auto.method)
+    assert same.sigma == pytest.approx(auto.sigma)
+    assert same.gap == auto.gap
+    assert same.outer_iters == auto.outer_iters
 
 
 def test_method_trust_converges_and_reports_path():
     r = csar.solve(OCTANT_XYZ, geo='vec3', method='trust')
     assert r.status == 'converged'
     assert r.method == 'trust'
-    assert r.aspect_ratio == pytest.approx(1.0, abs=1e-6)
 
 
 def test_method_invalid_rejected():

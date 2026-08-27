@@ -36,7 +36,6 @@ cdef extern from "csar.h":
         CSAR_COPLANAR_INPUT
         CSAR_OUT_OF_MEMORY
         CSAR_INTERNAL
-        CSAR_INVALID_METHOD
         CSAR_STATUS_CONVERGED
         CSAR_STATUS_INFEASIBLE
         CSAR_STATUS_DID_NOT_CONVERGE
@@ -68,8 +67,31 @@ _STATUS = {
     CSAR_STATUS_DID_NOT_CONVERGE: 'did_not_converge',
     CSAR_STATUS_PRECISION_FLOOR: 'precision_floor',
 }
-_METHOD_NAME = {CSAR_METHOD_TRUST: 'trust'}
+_METHOD_NAME = {CSAR_METHOD_TRUST: 'trust', CSAR_METHOD_NONE: None}
 _METHOD_CODE = {'trust': CSAR_METHOD_TRUST, 'auto': CSAR_METHOD_AUTO}
+
+# Error code -> (exception type, message). The message says what the
+# caller did; the *why* lives in solve()'s docstring, which is this
+# package's own documented surface.
+_ERRORS = {
+    CSAR_INSUFFICIENT_POINTS: (
+        ValueError, 'csar: need at least 3 points to define a cone'),
+    CSAR_INVALID_TOLERANCE: (
+        ValueError,
+        'csar: invalid tolerance — gap_tol must be finite and positive '
+        '(and below 1e30); coplanarity_tol must be finite'),
+    CSAR_COPLANAR_INPUT: (
+        ValueError,
+        'csar: input is (near-)coplanar — points lie ~on a great circle, '
+        'so no meaningful enclosing cone exists. coplanarity_tol<=0 '
+        'bypasses the near-coplanar check only; exactly rank-deficient '
+        'input is always rejected.'),
+    CSAR_OUT_OF_MEMORY: (MemoryError, 'csar: out of memory'),
+    CSAR_INTERNAL: (
+        RuntimeError,
+        'csar: internal solver error (a PSD/duality invariant was '
+        'violated beyond float noise) — please report it'),
+}
 
 
 def solve(double[:, ::1] pts not None, double gap_tol, int n_hull,
@@ -80,9 +102,8 @@ def solve(double[:, ::1] pts not None, double gap_tol, int n_hull,
     if pts.shape[1] != 3:
         raise ValueError('pts must be a 2-D array of shape (N, 3)')
     if method not in _METHOD_CODE:
-        raise ValueError(
-            f"csar: method must be 'trust' or 'auto'; got {method!r}"
-        )
+        names = ', '.join(repr(m) for m in _METHOD_CODE)
+        raise ValueError(f'csar: method must be one of {names}; got {method!r}')
 
     cdef csar_result r
     # NULL lambdas: the certificate's dual multipliers are not surfaced
@@ -93,52 +114,25 @@ def solve(double[:, ::1] pts not None, double gap_tol, int n_hull,
         coplanarity_tol, max_outer, _METHOD_CODE[method], &r, NULL,
     )
 
-    if err == CSAR_INSUFFICIENT_POINTS:
-        raise ValueError('csar: need at least 3 points to define a cone')
-    if err == CSAR_INVALID_TOLERANCE:
-        raise ValueError('csar: tolerances must be finite and positive')
-    if err == CSAR_COPLANAR_INPUT:
-        raise ValueError(
-            'csar: input is (near-)coplanar — points lie ~on a great circle, '
-            'so no meaningful enclosing cone exists. coplanarity_tol<=0 '
-            'bypasses the near-coplanar check only; exactly rank-deficient '
-            'input is always rejected.'
-        )
-    if err == CSAR_OUT_OF_MEMORY:
-        raise MemoryError('csar: out of memory')
-    if err == CSAR_INTERNAL:
-        raise RuntimeError(
-            'csar: internal solver error (a PSD/duality invariant was '
-            'violated beyond float noise) — please report it'
-        )
-    if err == CSAR_INVALID_METHOD:
-        raise ValueError("csar: method must be 'trust' or 'auto'")
+    # CSAR_INVALID_METHOD is unreachable: the guard above only lets
+    # codes the header declares through, so it falls to the catch-all.
     if err != CSAR_OK:
-        raise RuntimeError(f'csar: unknown error code {err}')
+        exc, msg = _ERRORS.get(err, (RuntimeError, f'csar: error code {err}'))
+        raise exc(msg)
 
     status = _STATUS[r.status]
     if r.status == CSAR_STATUS_INFEASIBLE:
         return {'status': status, 'residual': r.residual}
 
-    # The arrays are contiguous in csar_result — fill ndarrays here
-    # rather than round-tripping 12 floats through Python tuples.
-    sigma = np.empty(3)
-    Q = np.empty((3, 3))
-    cdef double[::1] sv = sigma
-    cdef double[:, ::1] qv = Q
-    cdef int i, j
-    for i in range(3):
-        sv[i] = r.sigma[i]
-        for j in range(3):
-            qv[i, j] = r.q[i * 3 + j]  # row-major Q[r, c]
-
+    # sigma and q are contiguous in csar_result: view them in place,
+    # then copy out (r is a stack local). Q is row-major Q[r, c].
     out = {
         'status': status,
-        'sigma': sigma,
-        'Q': Q,
+        'sigma': np.asarray(<double[:3]> &r.sigma[0]).copy(),
+        'Q': np.asarray(<double[:3, :3]> &r.q[0]).copy(),
         'gap': r.gap,
         'outer_iters': r.n_iters,
-        'method': None if r.method == CSAR_METHOD_NONE else _METHOD_NAME[r.method],
+        'method': _METHOD_NAME[r.method],
     }
     if r.status != CSAR_STATUS_CONVERGED:
         out['gap_floor'] = r.gap_floor

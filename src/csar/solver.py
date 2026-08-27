@@ -5,9 +5,8 @@ the typed `Outcome`.
 from typing import Literal
 
 from . import _cy  # Cython extension
-from . import outcomes
 from .convert import Geo, to_vec3
-from .outcomes import Outcome
+from .outcomes import Outcome, build
 
 Method = Literal['trust', 'auto']
 
@@ -40,8 +39,9 @@ def solve(
             `0` always hulls.
         coplanarity_tol: rejects near-coplanar input (points ~on a
             great circle) as `ValueError`. Pass `<= 0` to bypass.
-        max_outer: outer-iteration cap before returning a
-            `'did_not_converge'` result.
+        max_outer: iteration cap; exhausting it yields
+            `DidNotConverge`. It is not the remedy for
+            `PrecisionFloor` — loosen `gap_tol` there.
         method: solver path. `'auto'` (the default) resolves to the
             library's recommended method for the pinned csar version —
             currently `'trust'`, a trust-region descent that converges
@@ -79,4 +79,4 @@ def solve(
         X, float(gap_tol), int(n_hull), float(coplanarity_tol), int(max_outer),
         method,
     )
-    return outcomes.build(**raw)
+    return build(**raw)

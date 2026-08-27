@@ -20,7 +20,7 @@ truth value, so these compare by identity instead.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, get_args
 
 import numpy as np
 
@@ -125,14 +125,9 @@ class PrecisionFloor:
     as `DidNotConverge`, and like it, deliberately no ``aspect_ratio``.
 
     Attributes:
-        sigma: ``(3,)`` floor-iterate eigenvalues, uncertified but
-            input-precision-accurate.
-        Q: ``(3, 3)`` floor-iterate eigenbasis.
-        gap: gap at the last certified iterate.
         gap_floor: the smallest gap certifiable at f64 for this input's
-            geometry — the tolerance to loosen toward.
-        outer_iters: total iterations run.
-        method: which solver path produced this outcome.
+            geometry — here, the tolerance to loosen toward.
+        sigma, Q, gap, outer_iters, method: see `DidNotConverge`.
     """
 
     sigma: np.ndarray
@@ -151,12 +146,9 @@ class PrecisionFloor:
 Outcome = Converged | Infeasible | DidNotConverge | PrecisionFloor
 
 
-_STATUS_CLS = {
-    'converged': Converged,
-    'infeasible': Infeasible,
-    'did_not_converge': DidNotConverge,
-    'precision_floor': PrecisionFloor,
-}
+# Derived from the union, keyed by each class's own `status` ClassVar:
+# the roster and the spellings each have one source.
+_STATUS_CLS = {cls.status: cls for cls in get_args(Outcome)}
 
 
 def build(status, **fields) -> Outcome:

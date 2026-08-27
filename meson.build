@@ -24,10 +24,7 @@ if host_machine.system() == 'darwin'
 endif
 
 # Run `zig build` and ask Zig to install its outputs directly into the
-# meson build dir (so meson's custom_target output basenames match):
-# the archive — already repacked for Apple's ld by csar_abi on darwin
-# (its dev.md "The archive and Apple's linker") — and csar.h, the
-# declaration the Cython layer compiles against.
+# meson build dir, so meson's custom_target output basenames match.
 # build_always_stale: ninja can't see the Zig sources (or the csar_abi
 # dependency), so delegate change detection to zig's own
 # content-addressed cache — an unchanged re-run is near-instant, and
@@ -41,12 +38,14 @@ libcsar = custom_target('libcsar',
   console: true,
   build_always_stale: true,
 )
+csar_lib = libcsar[0]
+csar_h = libcsar[1]
 
 # The header rides in the sources list so its generation orders before
 # the extension's C compile (link_with alone only orders the link).
 py.extension_module('_cy',
-  ['src/cython/_cy.pyx', libcsar[1]],
-  link_with: libcsar[0],
+  ['src/cython/_cy.pyx', csar_h],
+  link_with: csar_lib,
   install: true,
   subdir: 'csar',
 )
