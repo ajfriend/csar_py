@@ -35,7 +35,7 @@ without a wheel — point pip/uv at the git URL:
 
 ```sh
 pip install git+https://github.com/ajfriend/csar_py.git         # latest main
-pip install git+https://github.com/ajfriend/csar_py.git@v0.1.1  # a tagged release
+pip install git+https://github.com/ajfriend/csar_py.git@v0.2.0  # a tagged release
 ```
 
 That path triggers a source build: meson-python pulls the Zig toolchain
@@ -116,6 +116,14 @@ csar.to_vec3([(0, 0), (0, 90), (90, 0)])
 # array([[1., 0., 0.],
 #        [0., 1., 0.],
 #        [0., 0., 1.]])
+```
+
+`csar.__version__` is this package's version; `csar.versions()` adds
+the two layers under it, for recording provenance next to results:
+
+```python
+csar.versions()
+# {'csar': '0.2.0', 'csar_abi': '0.2.1', 'csar_zig': '0.7.0'}
 ```
 
 ## Outcomes

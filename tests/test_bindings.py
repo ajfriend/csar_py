@@ -504,3 +504,18 @@ def test_method_trust_converges_and_reports_path():
 def test_method_invalid_rejected():
     with pytest.raises(ValueError, match='method'):
         csar.solve(OCTANT_XYZ, geo='vec3', method='newton')
+
+
+# ---- versions ----------------------------------------------------------------
+
+def test_version_matches_installed_metadata():
+    from importlib.metadata import version
+    assert csar.__version__ == version('csar')
+
+
+def test_versions_reports_all_three_layers():
+    v = csar.versions()
+    assert set(v) == {'csar', 'csar_abi', 'csar_zig'}
+    assert v['csar'] == csar.__version__
+    for layer, s in v.items():
+        assert isinstance(s, str) and s.count('.') == 2, (layer, s)

@@ -13,7 +13,7 @@ build-backend = "mesonpy"
 
 [project]
 name = "csar"
-version = "0.1.1"
+version = "0.2.0"
 description = "Conic spherical aspect-ratio solver: tightest enclosing cone of a point set on the unit sphere."
 readme = "readme.md"
 requires-python = ">=3.11"
@@ -22,7 +22,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "AJ Friend", email = "ajfriend@gmail.com" }]
 keywords = ["conic", "spherical", "aspect-ratio", "cone", "geometry", "geodesy", "geospatial", "optimization", "zig"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Operating System :: MacOS",
