@@ -207,7 +207,8 @@ publishing (no API tokens), gated by the repo's `pypi` GitHub environment
 > **The package version has ONE source of truth: `[project] version` in
 > `pyproject.toml`.** Bump only that. `meson.build`'s `project()` deliberately
 > carries no `version:` (meson-python reads pyproject), so there is no second
-> place to keep in sync. The git tag `vX.Y.Z` must match that version.
+> place to keep in sync; `csar.__version__` reads it back from the installed
+> metadata. The git tag `vX.Y.Z` must match that version.
 
 Steps:
 
@@ -215,7 +216,7 @@ Steps:
 2. **Bump `[project] version`** in `pyproject.toml`, add a `changelog.md`
    entry, commit + push to `main`. Wait for `test` and `wheels` to go green.
 3. **Create a GitHub release**: tag `vX.Y.Z` (matching the pyproject version),
-   target `main`, write notes (link the `skar_py` provenance for the record).
+   target `main`, with the changelog entry as the notes.
 4. **Approve the publish.** The release event triggers `wheels`; its `to-pypi`
    job builds the sdist + full wheel matrix, then pauses on the `pypi`
    environment — **approve the deployment** to let it upload via OIDC.

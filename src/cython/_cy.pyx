@@ -49,6 +49,15 @@ cdef extern from "csar.h":
     const double CSAR_DEFAULT_COPLANARITY_TOL
     const uint32_t CSAR_DEFAULT_MAX_OUTER
 
+    const char *csar_abi_version()
+    const char *csar_upstream_version()
+
+
+# The ABI's own version and the solver's, as the linked archive reports
+# them — the two layers under this package, for `csar.versions()`.
+ABI_VERSION = csar_abi_version().decode('ascii')
+UPSTREAM_VERSION = csar_upstream_version().decode('ascii')
+
 
 # Upstream's SolveOptions defaults, by the header's names — `solve`'s
 # keyword defaults in solver.py, so a retune upstream flows through.
