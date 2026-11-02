@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .csar_abi = .{
-            .url = "https://github.com/ajfriend/csar_abi/archive/refs/tags/v0.2.0.tar.gz",
-            .hash = "csar_abi-0.2.0-Wn7cVZadAAAulMLwx-dSLOZ5exWXnHgk44Z3RNXp4Q8a",
+            .url = "https://github.com/ajfriend/csar_abi/archive/refs/tags/v0.2.1.tar.gz",
+            .hash = "csar_abi-0.2.1-Wn7cVZadAACamtKvXSdscL7yUOVOk8eDVSLA5CTqgwMW",
         },
     },
     .paths = .{

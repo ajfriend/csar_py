@@ -123,7 +123,7 @@ the two layers under it, for recording provenance next to results:
 
 ```python
 csar.versions()
-# {'csar': '0.2.0', 'csar_abi': '0.2.0', 'csar_zig': '0.5.0'}
+# {'csar': '0.2.0', 'csar_abi': '0.2.1', 'csar_zig': '0.7.0'}
 ```
 
 ## Outcomes
